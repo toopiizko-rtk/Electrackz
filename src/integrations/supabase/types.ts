@@ -14,7 +14,127 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          id: string
+          name: string | null
+          note: string | null
+          site_id: string | null
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          id?: string
+          name?: string | null
+          note?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          id?: string
+          name?: string | null
+          note?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sites: {
+        Row: {
+          address: string | null
+          client: string | null
+          created_at: string
+          dates: string[]
+          id: string
+          income: number
+          name: string
+          status: string
+        }
+        Insert: {
+          address?: string | null
+          client?: string | null
+          created_at?: string
+          dates?: string[]
+          id?: string
+          income?: number
+          name: string
+          status?: string
+        }
+        Update: {
+          address?: string | null
+          client?: string | null
+          created_at?: string
+          dates?: string[]
+          id?: string
+          income?: number
+          name?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      work_logs: {
+        Row: {
+          category: string
+          created_at: string
+          date: string
+          detail: string
+          id: string
+          note: string | null
+          photos: string[]
+          qty: number
+          site_id: string | null
+          unit: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          date?: string
+          detail?: string
+          id?: string
+          note?: string | null
+          photos?: string[]
+          qty?: number
+          site_id?: string | null
+          unit?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          date?: string
+          detail?: string
+          id?: string
+          note?: string | null
+          photos?: string[]
+          qty?: number
+          site_id?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_logs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
