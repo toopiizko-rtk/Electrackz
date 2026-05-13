@@ -9,7 +9,7 @@ function useTable<T extends { id: string }>(table: "sites" | "work_logs" | "expe
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const { data: rows } = await supabase.from(table).select("*").order(orderCol, { ascending: false });
-    setData((rows ?? []) as T[]);
+    setData(((rows ?? []) as unknown) as T[]);
     setLoading(false);
   }, [table, orderCol]);
 
