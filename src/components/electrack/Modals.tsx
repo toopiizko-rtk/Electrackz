@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, X, Camera, Pencil, ImagePlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Trash2, X, Camera, Pencil, ImagePlus, ScanLine, Bookmark, Loader2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose,
   Button, Input, Textarea, Label, Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
@@ -12,6 +12,8 @@ import {
 } from "@/lib/electrack";
 import { compressImage } from "@/lib/image";
 import { supabase } from "@/integrations/supabase/client";
+import { useWorkPresets, type WorkPreset } from "@/lib/use-presets";
+import { ocrWorkLog } from "@/lib/ocr.functions";
 
 // ── Photo uploader (with compression) ────────────────────────────────────
 function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: string[]) => void }) {
