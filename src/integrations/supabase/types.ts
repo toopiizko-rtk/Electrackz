@@ -135,6 +135,33 @@ export type Database = {
           },
         ]
       }
+      work_presets: {
+        Row: {
+          category: string
+          created_at: string
+          detail: string
+          id: string
+          unit: string
+          use_count: number
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          detail: string
+          id?: string
+          unit?: string
+          use_count?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          detail?: string
+          id?: string
+          unit?: string
+          use_count?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

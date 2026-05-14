@@ -113,9 +113,9 @@ export default function ElecTrackApp() {
       <LogModal open={modal?.type === "addLog" || modal?.type === "editLog"} onClose={close}
         sites={sites} prefill={modal?.type === "addLog" ? modal.data : undefined}
         log={modal?.type === "editLog" ? modal.data : null}
-        onSave={async (d) => {
-          if (modal?.type === "editLog") await updateLog(modal.data.id, d);
-          else await addLog(d);
+        onSave={async (rows) => {
+          if (modal?.type === "editLog" && rows[0]) await updateLog(modal.data.id, rows[0]);
+          else for (const r of rows) await addLog(r);
           close();
         }} />
       <ExpenseModal open={modal?.type === "addExp" || modal?.type === "editExp"} onClose={close}
