@@ -179,60 +179,186 @@ export function EditSiteModal({ open, onClose, site, onSave }: { open: boolean; 
   );
 }
 
-// ── AddLog / EditLog (combined) ──────────────────────────────────────────
+// ── AddLog / EditLog (combined, multi-row + presets + OCR) ──────────────
+type LogItem = { category: string; detail: string; qty: string; unit: string; note: string };
+const blankItem = (): LogItem => ({ category: "เดินสาย", detail: "", qty: "", unit: "m", note: "" });
+
 export function LogModal({ open, onClose, sites, prefill, log, onSave }: {
   open: boolean; onClose: () => void; sites: Site[]; prefill?: { site_id?: string }; log?: WorkLog | null;
-  onSave: (d: Partial<WorkLog>) => Promise<void>;
+  onSave: (rows: Partial<WorkLog>[]) => Promise<void>;
 }) {
-  const blank = (): Partial<WorkLog> => ({
-    site_id: prefill?.site_id || sites[0]?.id || null,
-    date: todayStr(), category: "เดินสาย", detail: "", qty: 0, unit: "m", note: "", photos: [],
-  });
-  const [f, setF] = useState<Partial<WorkLog>>(blank());
-  useEffect(() => { if (open) setF(log ? { ...log } : blank()); }, [open, log]);
-  const set = (k: keyof WorkLog, v: any) => setF((p) => ({ ...p, [k]: v }));
+  const editing = !!log;
+  const [siteId, setSiteId] = useState<string | null>(null);
+  const [date, setDate] = useState(todayStr());
+  const [items, setItems] = useState<LogItem[]>([blankItem()]);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const ocrRef = useRef<HTMLInputElement>(null);
+  const { presets, savePreset } = useWorkPresets();
+
+  useEffect(() => {
+    if (!open) return;
+    if (log) {
+      setSiteId(log.site_id);
+      setDate(log.date || todayStr());
+      setItems([{ category: log.category, detail: log.detail, qty: String(log.qty ?? ""), unit: log.unit, note: log.note || "" }]);
+      setPhotos(log.photos || []);
+    } else {
+      setSiteId(prefill?.site_id || sites[0]?.id || null);
+      setDate(todayStr());
+      setItems([blankItem()]);
+      setPhotos([]);
+    }
+  }, [open, log, prefill, sites]);
+
+  const updateItem = (i: number, patch: Partial<LogItem>) => setItems((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const addRow = () => setItems((p) => [...p, blankItem()]);
+  const removeRow = (i: number) => setItems((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p));
 
   const save = async () => {
-    if (!f.detail?.trim() || !f.qty) return;
-    await onSave({ ...f, qty: Number(f.qty) });
+    const valid = items.filter((it) => it.detail.trim() && Number(it.qty));
+    if (!valid.length) return;
+    // save reusable presets
+    for (const it of valid) await savePreset(it.category, it.detail, it.unit);
+    const rows: Partial<WorkLog>[] = valid.map((it) => ({
+      site_id: siteId, date, category: it.category, detail: it.detail.trim(),
+      qty: Number(it.qty), unit: it.unit, note: it.note, photos,
+    }));
+    await onSave(rows);
+  };
+
+  const runOcr = async (file: File) => {
+    setOcrBusy(true);
+    try {
+      const blob = await compressImage(file, 1400, 0.8);
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      const { items: extracted } = await ocrWorkLog({ data: { imageDataUrl: dataUrl, categories: WORK_CATS, units: WORK_UNITS } });
+      if (extracted?.length) {
+        const next: LogItem[] = extracted.map((x) => ({
+          category: WORK_CATS.includes(x.category) ? x.category : "อื่นๆ",
+          detail: x.detail || "",
+          qty: String(x.qty ?? ""),
+          unit: WORK_UNITS.includes(x.unit) ? x.unit : "m",
+          note: x.note || "",
+        }));
+        setItems(next);
+      } else {
+        alert("ไม่พบรายการในรูปภาพ ลองถ่ายใหม่ให้ชัดขึ้น");
+      }
+    } catch (e: any) {
+      alert("OCR ผิดพลาด: " + (e?.message || "unknown"));
+    } finally {
+      setOcrBusy(false);
+      if (ocrRef.current) ocrRef.current.value = "";
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent onClose={onClose}>
-        <DialogHeader><DialogTitle>{log ? "✏️ แก้ไขบันทึกงาน" : "📋 บันทึกงาน"}</DialogTitle><DialogClose /></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? "✏️ แก้ไขบันทึกงาน" : "📋 บันทึกงานรายวัน"}</DialogTitle><DialogClose /></DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>ไซต์งาน</Label>
-              <Select value={f.site_id ?? undefined} onValueChange={(v) => set("site_id", v)}>
-                <SelectTrigger><SelectValue placeholder="เลือกไซต์" /></SelectTrigger>
-                <SelectContent>{sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5"><Label>วันที่</Label><Input type="date" value={f.date || ""} onChange={(e) => set("date", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>วันที่</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>ไซต์งาน</Label>
+            <Select value={siteId ?? undefined} onValueChange={(v) => setSiteId(v)}>
+              <SelectTrigger><SelectValue placeholder="-- เลือกไซต์งาน --" /></SelectTrigger>
+              <SelectContent>{sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+            </Select>
           </div>
-          <div className="space-y-1.5"><Label>ประเภทงาน</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {WORK_CATS.map((c) => <Chip key={c} active={f.category === c} onClick={() => set("category", c)}>{c}</Chip>)}
-            </div>
-          </div>
-          <div className="space-y-1.5"><Label>รายละเอียด *</Label><Input value={f.detail || ""} onChange={(e) => set("detail", e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>ปริมาณ *</Label><Input type="number" value={f.qty ?? ""} onChange={(e) => set("qty", e.target.value as any)} /></div>
-            <div className="space-y-1.5"><Label>หน่วย</Label>
-              <Select value={f.unit} onValueChange={(v) => set("unit", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{WORK_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5"><Label>หมายเหตุ</Label><Textarea value={f.note || ""} onChange={(e) => set("note", e.target.value)} /></div>
+
+          {!editing && (
+            <>
+              <input ref={ocrRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => e.target.files?.[0] && runOcr(e.target.files[0])} />
+              <Button type="button" variant="secondary" size="sm" className="w-full" onClick={() => ocrRef.current?.click()} disabled={ocrBusy}>
+                {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+                {ocrBusy ? "กำลังอ่านลายมือ..." : "สแกนลายมือจากกระดาษ"}
+              </Button>
+            </>
+          )}
+
+          {items.map((it, i) => (
+            <LogItemRow
+              key={i}
+              item={it}
+              presets={presets}
+              showRemove={items.length > 1 || editing}
+              onChange={(patch) => updateItem(i, patch)}
+              onRemove={() => removeRow(i)}
+            />
+          ))}
+
+          {!editing && (
+            <button type="button" onClick={addRow}
+              className="w-full py-3 rounded-xl border border-dashed border-yellow-400/40 text-yellow-400 text-sm font-semibold hover:bg-yellow-400/5 transition">
+              + เพิ่มรายการงาน
+            </button>
+          )}
+
           <Separator />
-          <PhotoUploader photos={f.photos || []} onChange={(p) => set("photos", p)} />
-          <Button className="w-full" onClick={save}>{log ? "บันทึกการแก้ไข" : "บันทึกงาน"}</Button>
+          <PhotoUploader photos={photos} onChange={setPhotos} />
+          <Button className="w-full" onClick={save}>{editing ? "บันทึกการแก้ไข" : `บันทึก (${items.filter((i) => i.detail.trim() && Number(i.qty)).length} รายการ)`}</Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LogItemRow({ item, presets, showRemove, onChange, onRemove }: {
+  item: LogItem; presets: WorkPreset[]; showRemove: boolean;
+  onChange: (p: Partial<LogItem>) => void; onRemove: () => void;
+}) {
+  const matching = useMemo(() => presets.filter((p) => p.category === item.category).slice(0, 8), [presets, item.category]);
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+      <div className="space-y-1.5"><Label>ประเภทงาน</Label>
+        <Select value={item.category} onValueChange={(v) => onChange({ category: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>{WORK_CATS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      {matching.length > 0 && (
+        <div className="space-y-1">
+          <Label className="text-[10px] text-zinc-500 flex items-center gap-1"><Bookmark className="h-3 w-3" /> เลือกจากที่บันทึกไว้</Label>
+          <div className="flex flex-wrap gap-1">
+            {matching.map((p) => (
+              <button key={p.id} type="button"
+                onClick={() => onChange({ detail: p.detail, unit: p.unit })}
+                className="text-[11px] px-2 py-1 rounded-md bg-zinc-800 hover:bg-yellow-400/10 hover:text-yellow-400 border border-zinc-700">
+                {p.detail}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="space-y-1.5"><Label>รายละเอียด</Label>
+        <Input value={item.detail} onChange={(e) => onChange({ detail: e.target.value })} placeholder="เช่น สายปลั๊ก 2.5mm²" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5"><Label>ปริมาณ</Label>
+          <Input type="number" inputMode="decimal" value={item.qty} onChange={(e) => onChange({ qty: e.target.value })} />
+        </div>
+        <div className="space-y-1.5"><Label>หน่วย</Label>
+          <Select value={item.unit} onValueChange={(v) => onChange({ unit: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{WORK_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
+      {showRemove && (
+        <button type="button" onClick={onRemove} className="text-rose-400 hover:text-rose-300">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+      <div className="space-y-1.5"><Label>หมายเหตุ/ปัญหาที่เจอ</Label>
+        <Input value={item.note} onChange={(e) => onChange({ note: e.target.value })} placeholder="เช่น สายสั้นเกินไป" />
+      </div>
+    </div>
   );
 }
 
