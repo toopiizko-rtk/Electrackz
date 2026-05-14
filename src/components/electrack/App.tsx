@@ -9,6 +9,7 @@ import {
 import {
   AddSiteModal, EditSiteModal, LogModal, ExpenseModal, SiteDetailModal, AddDateModal,
 } from "@/components/electrack/Modals";
+import { ExportShareModal } from "@/components/electrack/ExportShareModal";
 import { useSites, useWorkLogs, useExpenses } from "@/lib/use-electrack";
 import {
   cn, fmtMoney, fmtDate, fmtShort, todayStr,
@@ -25,12 +26,13 @@ type Modal =
   | { type: "editExp"; data: Expense }
   | { type: "siteDetail"; data: Site }
   | { type: "addDate"; data: Site }
+  | { type: "export"; data: Site }
   | null;
 
 export default function ElecTrackApp() {
   const [tab, setTab] = useState<"dash" | "sites" | "cal" | "logs" | "summary">("dash");
   const [modal, setModal] = useState<Modal>(null);
-  const { sites, loading: sl, addSite, updateSite, deleteSite } = useSites();
+  const { sites, loading: sl, addSite, updateSite, deleteSite, ensureDate } = useSites();
   const { logs, loading: ll, addLog, updateLog, deleteLog } = useWorkLogs();
   const { expenses, loading: el, addExpense, updateExpense, deleteExpense } = useExpenses();
   const loading = sl || ll || el;
@@ -114,8 +116,15 @@ export default function ElecTrackApp() {
         sites={sites} prefill={modal?.type === "addLog" ? modal.data : undefined}
         log={modal?.type === "editLog" ? modal.data : null}
         onSave={async (rows) => {
-          if (modal?.type === "editLog" && rows[0]) await updateLog(modal.data.id, rows[0]);
-          else for (const r of rows) await addLog(r);
+          if (modal?.type === "editLog" && rows[0]) {
+            await updateLog(modal.data.id, rows[0]);
+            if (rows[0].site_id && rows[0].date) await ensureDate(rows[0].site_id, rows[0].date);
+          } else {
+            for (const r of rows) {
+              await addLog(r);
+              if (r.site_id && r.date) await ensureDate(r.site_id, r.date);
+            }
+          }
           close();
         }} />
       <ExpenseModal open={modal?.type === "addExp" || modal?.type === "editExp"} onClose={close}
@@ -128,6 +137,8 @@ export default function ElecTrackApp() {
         }} />
       <AddDateModal open={modal?.type === "addDate"} onClose={close} site={modal?.type === "addDate" ? modal.data : null}
         onSave={async (dates) => { if (modal?.type === "addDate") await updateSite(modal.data.id, { dates }); }} />
+      <ExportShareModal open={modal?.type === "export"} onClose={close}
+        site={modal?.type === "export" ? modal.data : null} logs={logs} expenses={expenses} />
       <SiteDetailModal open={modal?.type === "siteDetail"} onClose={close}
         site={modal?.type === "siteDetail" ? modal.data : null}
         logs={logs} expenses={expenses} siteSummary={siteSummary}
@@ -138,6 +149,7 @@ export default function ElecTrackApp() {
         onEditExp={(e) => open({ type: "editExp", data: e })}
         onDeleteLog={deleteLog}
         onDeleteExp={deleteExpense}
+        onExport={() => modal?.type === "siteDetail" && open({ type: "export", data: modal.data })}
       />
     </div>
   );

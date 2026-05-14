@@ -11,7 +11,7 @@ import {
   type Site, type WorkLog, type Expense,
 } from "@/lib/electrack";
 import { compressImage } from "@/lib/image";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-ext";
 import { useWorkPresets, type WorkPreset } from "@/lib/use-presets";
 import { ocrWorkLog } from "@/lib/ocr.functions";
 
@@ -443,13 +443,14 @@ export function AddDateModal({ open, onClose, site, onSave }: { open: boolean; o
 
 // ── SiteDetail ───────────────────────────────────────────────────────────
 export function SiteDetailModal({
-  open, onClose, site, logs, expenses, siteSummary, onSave, onAddLog, onEditLog, onAddExp, onEditExp, onDeleteLog, onDeleteExp,
+  open, onClose, site, logs, expenses, siteSummary, onSave, onAddLog, onEditLog, onAddExp, onEditExp, onDeleteLog, onDeleteExp, onExport,
 }: {
   open: boolean; onClose: () => void; site: Site | null; logs: WorkLog[]; expenses: Expense[];
   siteSummary: (id: string) => { income: number; totalExp: number; profit: number };
   onSave: (d: Partial<Site>) => Promise<void>;
   onAddLog: () => void; onEditLog: (l: WorkLog) => void; onAddExp: () => void; onEditExp: (e: Expense) => void;
   onDeleteLog: (id: string) => void; onDeleteExp: (id: string) => void;
+  onExport?: () => void;
 }) {
   if (!site) return null;
   const { income, totalExp, profit } = siteSummary(site.id);
@@ -462,13 +463,18 @@ export function SiteDetailModal({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent onClose={onClose}>
         <DialogHeader>
-          <div>
+          <div className="flex-1">
             <DialogTitle>{site.name}</DialogTitle>
             <div className="flex gap-2 mt-1 text-xs text-zinc-500">
               {site.client && <span>👤 {site.client}</span>}
               {site.address && <span>📍 {site.address}</span>}
             </div>
           </div>
+          {onExport && (
+            <Button variant="secondary" size="sm" onClick={onExport} className="mr-8">
+              📤 ส่งออก
+            </Button>
+          )}
           <DialogClose />
         </DialogHeader>
 
