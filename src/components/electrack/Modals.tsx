@@ -11,7 +11,7 @@ import {
   type Site, type WorkLog, type Expense,
 } from "@/lib/electrack";
 import { compressImage } from "@/lib/image";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-ext";
 import { useWorkPresets, type WorkPreset } from "@/lib/use-presets";
 import { ocrWorkLog } from "@/lib/ocr.functions";
 
