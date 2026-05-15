@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Electrack" },
+      { name: "description", content: "Site Progress Tracker is a mobile and web application for managing construction site work logs and progress." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Electrack" },
+      { property: "og:description", content: "Site Progress Tracker is a mobile and web application for managing construction site work logs and progress." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Electrack" },
+      { name: "twitter:description", content: "Site Progress Tracker is a mobile and web application for managing construction site work logs and progress." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/255eb100-c9fd-4b00-b21e-dddf2622d63f/id-preview-9463ccad--e3cc9a2e-4bbc-4e6e-a2ab-adbdd75e4a4c.lovable.app-1778803742032.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/255eb100-c9fd-4b00-b21e-dddf2622d63f/id-preview-9463ccad--e3cc9a2e-4bbc-4e6e-a2ab-adbdd75e4a4c.lovable.app-1778803742032.png" },
     ],
     links: [
       {
