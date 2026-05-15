@@ -67,31 +67,36 @@ export function ExportShareModal({ open, onClose, site, logs, expenses }: Props)
   };
 
   const exportExcel = () => {
-    const wb = XLSX.utils.book_new();
-    const summary = [
-      ["ไซต์", site.name],
-      ["ผู้ว่าจ้าง", site.client || ""],
-      ["ที่อยู่", site.address || ""],
-      ["สถานะ", site.status],
-      ["รายรับ", Number(site.income || 0)],
-      ["รายจ่ายรวม", totalExp],
-      ["กำไร", profit],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "สรุป");
+    try {
+      const wb = XLSX.utils.book_new();
+      const summary = [
+        ["ไซต์", site.name],
+        ["ผู้ว่าจ้าง", site.client || ""],
+        ["ที่อยู่", site.address || ""],
+        ["สถานะ", site.status],
+        ["รายรับ", Number(site.income || 0)],
+        ["รายจ่ายรวม", totalExp],
+        ["กำไร", profit],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "สรุป");
 
-    const logsRows = [
-      ["วันที่", "หมวด", "รายละเอียด", "จำนวน", "หน่วย", "หมายเหตุ"],
-      ...siteLogs.map((l) => [l.date, l.category, l.detail, Number(l.qty), l.unit, l.note || ""]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logsRows), "บันทึกงาน");
+      const logsRows = [
+        ["วันที่", "หมวด", "รายละเอียด", "จำนวน", "หน่วย", "หมายเหตุ"],
+        ...siteLogs.map((l) => [l.date, l.category, l.detail, Number(l.qty), l.unit, l.note || ""]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logsRows), "บันทึกงาน");
 
-    const expRows = [
-      ["วันที่", "หมวด", "รายการ", "จำนวนเงิน", "หมายเหตุ"],
-      ...siteExps.map((e) => [e.date, e.category, e.name || "", Number(e.amount), e.note || ""]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), "ค่าใช้จ่าย");
+      const expRows = [
+        ["วันที่", "หมวด", "รายการ", "จำนวนเงิน", "หมายเหตุ"],
+        ...siteExps.map((e) => [e.date, e.category, e.name || "", Number(e.amount), e.note || ""]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), "ค่าใช้จ่าย");
 
-    XLSX.writeFile(wb, `${site.name}.xlsx`);
+      XLSX.writeFile(wb, `${site.name}.xlsx`);
+    } catch (e: any) {
+      console.error("Excel export failed", e);
+      alert("Export Excel ไม่สำเร็จ: " + (e?.message || e));
+    }
   };
 
   const exportPDF = async () => {
