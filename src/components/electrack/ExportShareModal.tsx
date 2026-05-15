@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { FileText, FileSpreadsheet, Copy, Share2, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { toJpeg } from "html-to-image";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, Button,
 } from "@/components/electrack/ui";
@@ -67,66 +67,79 @@ export function ExportShareModal({ open, onClose, site, logs, expenses }: Props)
   };
 
   const exportExcel = () => {
-    const wb = XLSX.utils.book_new();
-    const summary = [
-      ["ไซต์", site.name],
-      ["ผู้ว่าจ้าง", site.client || ""],
-      ["ที่อยู่", site.address || ""],
-      ["สถานะ", site.status],
-      ["รายรับ", Number(site.income || 0)],
-      ["รายจ่ายรวม", totalExp],
-      ["กำไร", profit],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "สรุป");
+    try {
+      const wb = XLSX.utils.book_new();
+      const summary = [
+        ["ไซต์", site.name],
+        ["ผู้ว่าจ้าง", site.client || ""],
+        ["ที่อยู่", site.address || ""],
+        ["สถานะ", site.status],
+        ["รายรับ", Number(site.income || 0)],
+        ["รายจ่ายรวม", totalExp],
+        ["กำไร", profit],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "สรุป");
 
-    const logsRows = [
-      ["วันที่", "หมวด", "รายละเอียด", "จำนวน", "หน่วย", "หมายเหตุ"],
-      ...siteLogs.map((l) => [l.date, l.category, l.detail, Number(l.qty), l.unit, l.note || ""]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logsRows), "บันทึกงาน");
+      const logsRows = [
+        ["วันที่", "หมวด", "รายละเอียด", "จำนวน", "หน่วย", "หมายเหตุ"],
+        ...siteLogs.map((l) => [l.date, l.category, l.detail, Number(l.qty), l.unit, l.note || ""]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logsRows), "บันทึกงาน");
 
-    const expRows = [
-      ["วันที่", "หมวด", "รายการ", "จำนวนเงิน", "หมายเหตุ"],
-      ...siteExps.map((e) => [e.date, e.category, e.name || "", Number(e.amount), e.note || ""]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), "ค่าใช้จ่าย");
+      const expRows = [
+        ["วันที่", "หมวด", "รายการ", "จำนวนเงิน", "หมายเหตุ"],
+        ...siteExps.map((e) => [e.date, e.category, e.name || "", Number(e.amount), e.note || ""]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), "ค่าใช้จ่าย");
 
-    XLSX.writeFile(wb, `${site.name}.xlsx`);
+      XLSX.writeFile(wb, `${site.name}.xlsx`);
+    } catch (e: any) {
+      console.error("Excel export failed", e);
+      alert("Export Excel ไม่สำเร็จ: " + (e?.message || e));
+    }
   };
 
   const exportPDF = async () => {
     const node = previewRef.current;
     if (!node) return;
-    // render HTML to canvas → PDF (Thai-safe)
-    const canvas = await html2canvas(node, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
-    const img = canvas.toDataURL("image/jpeg", 0.92);
-    const pdf = new jsPDF({ unit: "pt", format: "a4" });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const ratio = canvas.height / canvas.width;
-    const imgW = pageW - 40;
-    const imgH = imgW * ratio;
-    let y = 20;
-    if (imgH <= pageH - 40) {
-      pdf.addImage(img, "JPEG", 20, y, imgW, imgH);
-    } else {
-      // multi-page slice
-      const pxPerPt = canvas.width / imgW;
-      const pageSliceH = (pageH - 40) * pxPerPt;
-      let offset = 0;
-      while (offset < canvas.height) {
-        const c = document.createElement("canvas");
-        c.width = canvas.width;
-        c.height = Math.min(pageSliceH, canvas.height - offset);
-        const ctx = c.getContext("2d")!;
-        ctx.drawImage(canvas, 0, offset, canvas.width, c.height, 0, 0, canvas.width, c.height);
-        const slice = c.toDataURL("image/jpeg", 0.92);
-        if (offset > 0) pdf.addPage();
-        pdf.addImage(slice, "JPEG", 20, 20, imgW, (c.height / canvas.width) * imgW);
-        offset += c.height;
+    try {
+      const dataUrl = await toJpeg(node, { backgroundColor: "#ffffff", quality: 0.92, pixelRatio: 2, cacheBust: true });
+      // measure
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error("img load")); });
+      const pdf = new jsPDF({ unit: "pt", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW - 40;
+      const ratio = img.height / img.width;
+      const imgH = imgW * ratio;
+      if (imgH <= pageH - 40) {
+        pdf.addImage(dataUrl, "JPEG", 20, 20, imgW, imgH);
+      } else {
+        // slice via canvas
+        const pxPerPt = img.width / imgW;
+        const pageSliceH = (pageH - 40) * pxPerPt;
+        let offset = 0;
+        while (offset < img.height) {
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = Math.min(pageSliceH, img.height - offset);
+          const ctx = c.getContext("2d")!;
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, offset, img.width, c.height, 0, 0, img.width, c.height);
+          const slice = c.toDataURL("image/jpeg", 0.92);
+          if (offset > 0) pdf.addPage();
+          pdf.addImage(slice, "JPEG", 20, 20, imgW, (c.height / img.width) * imgW);
+          offset += c.height;
+        }
       }
+      pdf.save(`${site.name}.pdf`);
+    } catch (e: any) {
+      console.error("PDF export failed", e);
+      alert("Export PDF ไม่สำเร็จ: " + (e?.message || e));
     }
-    pdf.save(`${site.name}.pdf`);
   };
 
   return (
