@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { FileText, FileSpreadsheet, Copy, Share2, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { toJpeg } from "html-to-image";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, Button,
 } from "@/components/electrack/ui";
