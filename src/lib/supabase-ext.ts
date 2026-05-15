@@ -2,8 +2,8 @@
 // Publishable key is safe to ship in client code.
 import { createClient } from "@supabase/supabase-js";
 
-const URL = "https://zsbuqgdazgkdiskelsdl.supabase.co";
-const KEY = "sb_publishable_6FgQh4vKtWiUYULLsbryJg_AM_cJtyL";
+const URL = "https://wnrnqfyldomposxbwner.supabase.co";
+const KEY = "sb_publishable_4y_kyIxg6p5SWCB8Pwyoxw_NxtxAMVR";
 
 export const supabase = createClient(URL, KEY, {
   auth: {
