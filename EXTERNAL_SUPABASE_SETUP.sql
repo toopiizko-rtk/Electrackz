@@ -56,8 +56,12 @@ alter table public.work_logs     enable row level security;
 alter table public.expenses      enable row level security;
 alter table public.work_presets  enable row level security;
 
-do $$ begin
-  for t in select unnest(array['sites','work_logs','expenses','work_presets']) loop
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['sites','work_logs','expenses','work_presets']
+  loop
     execute format('drop policy if exists "open all" on public.%I', t);
     execute format('create policy "open all" on public.%I for all using (true) with check (true)', t);
   end loop;
