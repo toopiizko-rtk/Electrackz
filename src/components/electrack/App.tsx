@@ -16,6 +16,7 @@ import {
   TH_DAYS, TH_MONTHS_FULL, EXP_CATS, STATUSES, STATUS_BG, STATUS_COLOR,
   type Site, type WorkLog, type Expense,
 } from "@/lib/electrack";
+import electrackLogo from "@/assets/electrack-logo.jpeg";
 
 type Modal =
   | { type: "addSite" }
