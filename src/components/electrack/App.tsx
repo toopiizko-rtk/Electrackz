@@ -16,6 +16,7 @@ import {
   TH_DAYS, TH_MONTHS_FULL, EXP_CATS, STATUSES, STATUS_BG, STATUS_COLOR,
   type Site, type WorkLog, type Expense,
 } from "@/lib/electrack";
+import electrackLogo from "@/assets/electrack-logo.jpeg";
 
 type Modal =
   | { type: "addSite" }
@@ -164,6 +165,9 @@ function DashPage({ sites, logs, expenses, today, now, totalProfit, monthIncome,
 
   return (
     <div className="p-4 space-y-4">
+      <div className="flex justify-center pt-2 pb-1">
+        <img src={electrackLogo} alt="ElecTrack" className="h-28 w-28 object-contain drop-shadow-[0_0_30px_rgba(245,197,24,0.35)]" />
+      </div>
       <div className="rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700/60 p-5">
         <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest font-mono mb-1">วันนี้ {TH_DAYS[now.getDay()]}</p>
         <h2 className="text-2xl font-black mb-3">{now.getDate()} {TH_MONTHS_FULL[now.getMonth()]} {now.getFullYear()}</h2>
