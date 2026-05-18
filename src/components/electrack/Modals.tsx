@@ -277,7 +277,7 @@ export function LogModal({ open, onClose, sites, prefill, log, onSave }: {
                 onChange={(e) => e.target.files?.[0] && runOcr(e.target.files[0])} />
               <Button type="button" variant="secondary" size="sm" className="w-full" onClick={() => ocrRef.current?.click()} disabled={ocrBusy}>
                 {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-                {ocrBusy ? "กำลังอ่านลายมือ..." : "สแกนลายมือจากกระดาษ"}
+                {ocrBusy ? "กำลังอ่านลายมือ..." : "สแกนลายมือ / อัปโหลดรูป"}
               </Button>
             </>
           )}
