@@ -13,7 +13,7 @@ import {
 import { compressImage } from "@/lib/image";
 import { supabase } from "@/lib/supabase-ext";
 import { useWorkPresets, type WorkPreset } from "@/lib/use-presets";
-import { ocrWorkLog } from "@/lib/ocr.functions";
+import { ocrWorkLog, ocrExpense } from "@/lib/ocr.functions";
 
 // ── Photo uploader (with compression) ────────────────────────────────────
 function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: string[]) => void }) {
@@ -49,7 +49,7 @@ function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: s
           <ImagePlus className="h-3.5 w-3.5" /> {busy ? "กำลังอัป..." : "เพิ่มรูป"}
         </Button>
       </div>
-      <input ref={ref} type="file" accept="image/*" multiple capture="environment" onChange={handle} className="hidden" />
+      <input ref={ref} type="file" accept="image/*" multiple onChange={handle} className="hidden" />
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((url, i) => (
@@ -273,11 +273,11 @@ export function LogModal({ open, onClose, sites, prefill, log, onSave }: {
 
           {!editing && (
             <>
-              <input ref={ocrRef} type="file" accept="image/*" capture="environment" className="hidden"
+              <input ref={ocrRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => e.target.files?.[0] && runOcr(e.target.files[0])} />
               <Button type="button" variant="secondary" size="sm" className="w-full" onClick={() => ocrRef.current?.click()} disabled={ocrBusy}>
                 {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-                {ocrBusy ? "กำลังอ่านลายมือ..." : "สแกนลายมือจากกระดาษ"}
+                {ocrBusy ? "กำลังอ่านลายมือ..." : "สแกนลายมือ / อัปโหลดรูป"}
               </Button>
             </>
           )}
@@ -362,47 +362,139 @@ function LogItemRow({ item, presets, showRemove, onChange, onRemove }: {
   );
 }
 
-// ── AddExpense (no AI for now) ───────────────────────────────────────────
+// ── Expense Modal (multi-row + OCR) ─────────────────────────────────────
+type ExpItem = { category: string; name: string; amount: string; note: string };
+const blankExp = (): ExpItem => ({ category: "อุปกรณ์ไฟฟ้า", name: "", amount: "", note: "" });
+
 export function ExpenseModal({ open, onClose, sites, prefill, expense, onSave }: {
   open: boolean; onClose: () => void; sites: Site[]; prefill?: { site_id?: string }; expense?: Expense | null;
-  onSave: (d: Partial<Expense>) => Promise<void>;
+  onSave: (rows: Partial<Expense>[]) => Promise<void>;
 }) {
-  const blank = (): Partial<Expense> => ({
-    site_id: prefill?.site_id || sites[0]?.id || null,
-    date: todayStr(), category: "อุปกรณ์ไฟฟ้า", name: "", amount: 0, note: "",
-  });
-  const [f, setF] = useState<Partial<Expense>>(blank());
-  useEffect(() => { if (open) setF(expense ? { ...expense } : blank()); }, [open, expense]);
-  const set = (k: keyof Expense, v: any) => setF((p) => ({ ...p, [k]: v }));
+  const editing = !!expense;
+  const [siteId, setSiteId] = useState<string | null>(null);
+  const [date, setDate] = useState(todayStr());
+  const [items, setItems] = useState<ExpItem[]>([blankExp()]);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const ocrRef = useRef<HTMLInputElement>(null);
+  const EXP_LABELS = EXP_CATS.map((c) => c.label);
+
+  useEffect(() => {
+    if (!open) return;
+    if (expense) {
+      setSiteId(expense.site_id);
+      setDate(expense.date || todayStr());
+      setItems([{ category: expense.category, name: expense.name || "", amount: String(expense.amount ?? ""), note: expense.note || "" }]);
+    } else {
+      setSiteId(prefill?.site_id || sites[0]?.id || null);
+      setDate(todayStr());
+      setItems([blankExp()]);
+    }
+  }, [open, expense, prefill, sites]);
+
+  const updateItem = (i: number, patch: Partial<ExpItem>) => setItems((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const addRow = () => setItems((p) => [...p, blankExp()]);
+  const removeRow = (i: number) => setItems((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p));
 
   const save = async () => {
-    if (!f.amount) return;
-    await onSave({ ...f, amount: Number(f.amount) });
+    const valid = items.filter((it) => Number(it.amount) > 0);
+    if (!valid.length) return;
+    const rows: Partial<Expense>[] = valid.map((it) => ({
+      site_id: siteId, date, category: it.category, name: it.name.trim(), amount: Number(it.amount), note: it.note,
+    }));
+    await onSave(rows);
   };
+
+  const runOcr = async (file: File) => {
+    setOcrBusy(true);
+    try {
+      const blob = await compressImage(file, 1400, 0.8);
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      const { items: extracted } = await ocrExpense({ data: { imageDataUrl: dataUrl, categories: EXP_LABELS } });
+      if (extracted?.length) {
+        setItems(extracted.map((x) => ({
+          category: EXP_LABELS.includes(x.category) ? x.category : "อื่นๆ",
+          name: x.name || "",
+          amount: String(x.amount ?? ""),
+          note: x.note || "",
+        })));
+      } else {
+        alert("ไม่พบรายการในรูปภาพ ลองถ่ายใหม่ให้ชัดขึ้น");
+      }
+    } catch (e: any) {
+      alert("OCR ผิดพลาด: " + (e?.message || "unknown"));
+    } finally {
+      setOcrBusy(false);
+      if (ocrRef.current) ocrRef.current.value = "";
+    }
+  };
+
+  const totalAmount = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent onClose={onClose}>
-        <DialogHeader><DialogTitle>{expense ? "✏️ แก้ไขค่าใช้จ่าย" : "💸 บันทึกค่าใช้จ่าย"}</DialogTitle><DialogClose /></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? "✏️ แก้ไขค่าใช้จ่าย" : "💸 บันทึกค่าใช้จ่าย"}</DialogTitle><DialogClose /></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>ไซต์งาน</Label>
-              <Select value={f.site_id ?? undefined} onValueChange={(v) => set("site_id", v)}>
+              <Select value={siteId ?? undefined} onValueChange={(v) => setSiteId(v)}>
                 <SelectTrigger><SelectValue placeholder="เลือกไซต์" /></SelectTrigger>
                 <SelectContent>{sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>วันที่</Label><Input type="date" value={f.date || ""} onChange={(e) => set("date", e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>วันที่</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           </div>
-          <div className="space-y-1.5"><Label>หมวดหมู่</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {EXP_CATS.map((c) => <Chip key={c.label} active={f.category === c.label} onClick={() => set("category", c.label)}>{c.label}</Chip>)}
+
+          {!editing && (
+            <>
+              <input ref={ocrRef} type="file" accept="image/*" className="hidden"
+                onChange={(e) => e.target.files?.[0] && runOcr(e.target.files[0])} />
+              <Button type="button" variant="secondary" size="sm" className="w-full" onClick={() => ocrRef.current?.click()} disabled={ocrBusy}>
+                {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+                {ocrBusy ? "กำลังอ่านใบเสร็จ..." : "สแกนใบเสร็จ / อัปโหลดรูป"}
+              </Button>
+            </>
+          )}
+
+          {items.map((it, i) => (
+            <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+              <div className="space-y-1.5"><Label>หมวดหมู่</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {EXP_CATS.map((c) => <Chip key={c.label} active={it.category === c.label} onClick={() => updateItem(i, { category: c.label })}>{c.label}</Chip>)}
+                </div>
+              </div>
+              <div className="space-y-1.5"><Label>รายการ</Label><Input value={it.name} onChange={(e) => updateItem(i, { name: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5"><Label>จำนวนเงิน (฿) *</Label>
+                  <Input type="number" inputMode="decimal" value={it.amount} onChange={(e) => updateItem(i, { amount: e.target.value })} />
+                </div>
+                <div className="space-y-1.5"><Label>หมายเหตุ</Label>
+                  <Input value={it.note} onChange={(e) => updateItem(i, { note: e.target.value })} />
+                </div>
+              </div>
+              {(items.length > 1 || editing) && (
+                <button type="button" onClick={() => removeRow(i)} className="text-rose-400 hover:text-rose-300">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
-          </div>
-          <div className="space-y-1.5"><Label>รายการ</Label><Input value={f.name || ""} onChange={(e) => set("name", e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>จำนวนเงิน (฿) *</Label><Input type="number" value={f.amount ?? ""} onChange={(e) => set("amount", e.target.value as any)} /></div>
-          <div className="space-y-1.5"><Label>หมายเหตุ</Label><Textarea value={f.note || ""} onChange={(e) => set("note", e.target.value)} rows={2} /></div>
-          <Button className="w-full" onClick={save}>บันทึก</Button>
+          ))}
+
+          {!editing && (
+            <button type="button" onClick={addRow}
+              className="w-full py-3 rounded-xl border border-dashed border-yellow-400/40 text-yellow-400 text-sm font-semibold hover:bg-yellow-400/5 transition">
+              + เพิ่มรายการ
+            </button>
+          )}
+
+          <Button className="w-full" onClick={save}>
+            {editing ? "บันทึกการแก้ไข" : `บันทึก ${items.filter((i) => Number(i.amount) > 0).length} รายการ (฿${fmtMoney(totalAmount)})`}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
