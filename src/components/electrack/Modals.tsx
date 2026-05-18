@@ -13,7 +13,7 @@ import {
 import { compressImage } from "@/lib/image";
 import { supabase } from "@/lib/supabase-ext";
 import { useWorkPresets, type WorkPreset } from "@/lib/use-presets";
-import { ocrWorkLog } from "@/lib/ocr.functions";
+import { ocrWorkLog, ocrExpense } from "@/lib/ocr.functions";
 
 // ── Photo uploader (with compression) ────────────────────────────────────
 function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: string[]) => void }) {
