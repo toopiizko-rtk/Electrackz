@@ -49,7 +49,7 @@ function PhotoUploader({ photos, onChange }: { photos: string[]; onChange: (p: s
           <ImagePlus className="h-3.5 w-3.5" /> {busy ? "กำลังอัป..." : "เพิ่มรูป"}
         </Button>
       </div>
-      <input ref={ref} type="file" accept="image/*" multiple capture="environment" onChange={handle} className="hidden" />
+      <input ref={ref} type="file" accept="image/*" multiple onChange={handle} className="hidden" />
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((url, i) => (
